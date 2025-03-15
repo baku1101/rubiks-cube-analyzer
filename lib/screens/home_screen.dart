@@ -165,13 +165,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // スクランブル中の表示
   Widget _buildScramblingView() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
       child: Column(
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          const Text('スクランブル中...'),
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('スクランブル中...'),
         ],
       ),
     );

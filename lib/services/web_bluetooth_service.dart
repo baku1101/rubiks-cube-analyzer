@@ -85,10 +85,6 @@ class WebBluetoothService extends ChangeNotifier implements BluetoothInterface {
       );
 
       final selectedDevice = await FlutterWebBluetooth.instance.requestDevice(requestOptions);
-      if (selectedDevice == null) {
-        debugPrint('デバイスが選択されませんでした');
-        return null;
-      }
 
       debugPrint('サービスを探索しました');
       return selectedDevice as BluetoothService;
@@ -111,33 +107,31 @@ class WebBluetoothService extends ChangeNotifier implements BluetoothInterface {
       final controller = StreamController<List<int>>();
 
       service.getCharacteristic(characteristicUuid).then((characteristic) async {
-        if (characteristic != null) {
-          debugPrint('通知を開始します: $characteristicUuid');
-          await characteristic.startNotifications();
-          
-          final valueStream = characteristic.value;
-          if (valueStream != null) {
-            _valueSubscription = valueStream.listen(
-              (value) {
-                if (value != null) {
-                  try {
-                    final bytes = _convertToBytes(value);
-                    controller.add(bytes);
-                    debugPrint('データを受信しました: ${bytes.length} bytes');
-                  } catch (e) {
-                    debugPrint('データ変換エラー: $e');
-                    controller.addError(e);
-                  }
+        debugPrint('通知を開始します: $characteristicUuid');
+        await characteristic.startNotifications();
+        
+        final valueStream = characteristic.value;
+        if (valueStream != null) {
+          _valueSubscription = valueStream.listen(
+            (value) {
+              if (value != null) {
+                try {
+                  final bytes = _convertToBytes(value);
+                  controller.add(bytes);
+                  debugPrint('データを受信しました: ${bytes.length} bytes');
+                } catch (e) {
+                  debugPrint('データ変換エラー: $e');
+                  controller.addError(e);
                 }
-              },
-              onError: (e) {
-                debugPrint('通知エラー: $e');
-                controller.addError(e);
-              },
-            );
-          }
+              }
+            },
+            onError: (e) {
+              debugPrint('通知エラー: $e');
+              controller.addError(e);
+            },
+          );
         }
-      }).catchError((e) {
+            }).catchError((e) {
         debugPrint('キャラクタリスティック取得エラー: $e');
         controller.addError(e);
       });
@@ -161,13 +155,11 @@ class WebBluetoothService extends ChangeNotifier implements BluetoothInterface {
       }
 
       final characteristic = await service.getCharacteristic(characteristicUuid);
-      if (characteristic != null) {
-        final data = value is Uint8List ? value : Uint8List.fromList(value);
-        await characteristic.writeValueWithResponse(data);
-        debugPrint('データを送信しました: ${data.length} bytes');
-        return true;
-      }
-      return false;
+      final data = value is Uint8List ? value : Uint8List.fromList(value);
+      await characteristic.writeValueWithResponse(data);
+      debugPrint('データを送信しました: ${data.length} bytes');
+      return true;
+          return false;
     } catch (e) {
       debugPrint('書き込みエラー: $e');
       return false;
@@ -193,19 +185,17 @@ class WebBluetoothService extends ChangeNotifier implements BluetoothInterface {
         ),
       );
 
-      if (device != null) {
-        final deviceInfo = BluetoothDeviceInfo(
-          id: device.id,
-          name: device.name ?? 'Unknown Device',
-          rssi: -1,
-          nativeDevice: device,
-          platform: BluetoothPlatform.web,
-        );
-        _scanResults.add(deviceInfo);
-        _scanController?.add(_scanResults);
-        debugPrint('デバイスを発見しました: ${device.id}');
-      }
-    } catch (error) {
+      final deviceInfo = BluetoothDeviceInfo(
+        id: device.id,
+        name: device.name ?? 'Unknown Device',
+        rssi: -1,
+        nativeDevice: device,
+        platform: BluetoothPlatform.web,
+      );
+      _scanResults.add(deviceInfo);
+      _scanController?.add(_scanResults);
+      debugPrint('デバイスを発見しました: ${device.id}');
+        } catch (error) {
       debugPrint('スキャンエラー: $error');
       _scanController?.addError(error);
     } finally {

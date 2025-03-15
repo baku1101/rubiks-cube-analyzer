@@ -59,12 +59,19 @@ class Sticker {
 // キューブの状態を表すクラス
 class CubeState {
   final Map<Face, List<List<Color>>> faces;
+  final List<int> _corners;  // コーナーの位置と向き
+  final List<int> _edges;    // エッジの位置と向き
 
-  const CubeState({required this.faces});
+  CubeState._internal({
+    required this.faces,
+    List<int>? corners,
+    List<int>? edges,
+  }) : _corners = corners ?? List.generate(8, (i) => i),
+       _edges = edges ?? List.generate(12, (i) => i);
 
   // 完成状態のキューブを生成
   factory CubeState.solved() {
-    return CubeState(
+    return CubeState._internal(
       faces: {
         Face.front: List.generate(3, (_) => List.filled(3, CubeColor.red)),
         Face.back: List.generate(3, (_) => List.filled(3, CubeColor.orange)),
@@ -73,6 +80,22 @@ class CubeState {
         Face.left: List.generate(3, (_) => List.filled(3, CubeColor.green)),
         Face.right: List.generate(3, (_) => List.filled(3, CubeColor.blue)),
       },
+    );
+  }
+
+  // コーナーとエッジの情報から状態を生成
+  factory CubeState.fromCornerAndEdge(List<int> corners, List<int> edges) {
+    if (corners.length != 8) {
+      throw ArgumentError('コーナーデータは8個必要です');
+    }
+    if (edges.length != 12) {
+      throw ArgumentError('エッジデータは12個必要です');
+    }
+
+    return CubeState._internal(
+      faces: CubeState.solved().faces,  // 一時的な面の状態
+      corners: corners,
+      edges: edges,
     );
   }
 
@@ -92,7 +115,7 @@ class CubeState {
       Face.back: _decodeV4Face(data[5]),
     };
 
-    return CubeState(faces: faces);
+    return CubeState._internal(faces: faces);
   }
 
   // V4のフェースデータを解析
@@ -111,6 +134,34 @@ class CubeState {
     return face;
   }
 
+  // コーナーとエッジの状態を取得
+  List<int> get corners => List.unmodifiable(_corners);
+  List<int> get edges => List.unmodifiable(_edges);
+
+  // パリティチェック
+  bool hasValidParity() {
+    var cornerPerm = 0;
+    var edgePerm = 0;
+    var cornerOri = 0;
+    var edgeOri = 0;
+
+    // コーナーのパリティをチェック
+    for (var i = 0; i < 8; i++) {
+      cornerPerm ^= _corners[i] >> 3;
+      cornerOri += _corners[i] & 0x7;
+    }
+    cornerOri %= 3;
+
+    // エッジのパリティをチェック
+    for (var i = 0; i < 12; i++) {
+      edgePerm ^= _edges[i] >> 1;
+      edgeOri ^= _edges[i] & 0x1;
+    }
+
+    // パリティチェック
+    return cornerPerm == 0 && cornerOri == 0 && edgePerm == 0 && edgeOri == 0;
+  }
+
   // 指定された面のステッカーの色を取得
   List<List<Color>> getFace(Face face) {
     return faces[face]!;
@@ -125,11 +176,16 @@ class CubeState {
         (i) => List.from(face.value[i]),
       );
     }
-    return CubeState(faces: newFaces);
+    return CubeState._internal(
+      faces: newFaces,
+      corners: List.from(_corners),
+      edges: List.from(_edges),
+    );
   }
 
   // キューブが完成状態かどうか
   bool get isSolved {
+    // 面の状態チェック
     for (final face in faces.entries) {
       final color = face.value[1][1]; // 中央のステッカーの色
       for (var i = 0; i < 3; i++) {
@@ -138,6 +194,15 @@ class CubeState {
         }
       }
     }
+
+    // コーナーとエッジの状態チェック
+    for (var i = 0; i < 8; i++) {
+      if (_corners[i] != i) return false;
+    }
+    for (var i = 0; i < 12; i++) {
+      if (_edges[i] != i) return false;
+    }
+
     return true;
   }
 
@@ -166,6 +231,8 @@ class CubeState {
         buffer.writeln(faces[face]![i].map((c) => _colorToString(c)).join(' '));
       }
     }
+    buffer.writeln('Corners: ${_corners.join(', ')}');
+    buffer.writeln('Edges: ${_edges.join(', ')}');
     return buffer.toString();
   }
 

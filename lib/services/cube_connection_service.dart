@@ -1,279 +1,287 @@
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:rubiks_cube_analyzer/services/bluetooth_factory.dart';
 import '../models/bluetooth_device_info.dart';
 import '../models/cube_state.dart';
 import '../models/move.dart';
-import 'bluetooth_factory.dart' as bf;
 import 'bluetooth_interface.dart';
+import 'gan_cube_protocol.dart';
 
-/// キューブの接続状態
-enum CubeConnectionState {
-  /// 未接続
-  disconnected,
-  /// 接続中
-  connecting,
-  /// 接続済み
-  connected,
-  /// エラー
-  error,
-}
-
-/// キューブの状態管理サービス
+/// GANキューブとの接続を管理するサービス
 class CubeConnectionService extends ChangeNotifier {
-  final BluetoothInterface _bluetoothService;
-  CubeConnectionState _connectionState = CubeConnectionState.disconnected;
-  String? _errorMessage;
+  final BluetoothInterface _bluetooth;
+  final GanCubeProtocol _protocol = GanCubeProtocol();
+  
+  CubeState? _currentState;
   BluetoothDeviceInfo? _connectedDevice;
-  dynamic _service;
-  StreamSubscription? _notificationSubscription;
-
-  // キューブの状態管理
-  CubeState _currentCubeState = CubeState.solved();
-  List<Move> _moveHistory = [];
+  int _batteryLevel = 0;
+  bool _isConnected = false;
+  bool _isConnecting = false;
   DateTime? _solveStartTime;
   DateTime? _solveEndTime;
-  int _batteryLevel = 0;
-  bool _isConnecting = false;
+  final List<Move> _moveHistory = [];
+  
+  CubeConnectionService({BluetoothInterface? bluetooth})
+    : _bluetooth = bluetooth ?? BluetoothFactory.getInstance(){
+    _initializeListeners();
+  }
 
-  /// キューブの接続状態
-  CubeConnectionState get connectionState => _connectionState;
-
-  /// エラーメッセージ
-  String? get errorMessage => _errorMessage;
-
-  /// 接続中のデバイス
+  // 状態の取得
+  bool get isConnected => _isConnected;
+  bool get isConnecting => _isConnecting;
+  CubeState get currentCubeState => CubeState.solved();
   BluetoothDeviceInfo? get connectedDevice => _connectedDevice;
-
-  /// キューブの現在の状態
-  CubeState get currentCubeState => _currentCubeState;
-
-  /// 移動履歴
+  int get batteryLevel => _batteryLevel;
   List<Move> get moveHistory => List.unmodifiable(_moveHistory);
-
-  /// ソルブ開始時間
   DateTime? get solveStartTime => _solveStartTime;
-
-  /// ソルブ終了時間
   DateTime? get solveEndTime => _solveEndTime;
 
-  /// バッテリー残量
-  int get batteryLevel => _batteryLevel;
+  /// リスナーの初期化
+  void _initializeListeners() {
+    _protocol.onStateUpdate = (state) {
+      _currentState = state;
+      _checkSolveStatus();
+      notifyListeners();
+    };
 
-  /// 接続中かどうか
-  bool get isConnecting => _isConnecting;
+    _protocol.onBatteryUpdate = (level) {
+      _batteryLevel = level;
+      notifyListeners();
+    };
 
-  /// 接続済みかどうか
-  bool get isConnected => _connectionState == CubeConnectionState.connected;
-
-  /// コンストラクタ
-  CubeConnectionService({BluetoothInterface? bluetoothService}) 
-    : _bluetoothService = bluetoothService ?? bf.BluetoothFactory.getInstance();
-
-  /// Bluetoothがサポートされているかチェック
-  static Future<bool> isSupported() {
-    return bf.BluetoothFactory.isSupported();
+    _protocol.onMoveDetected = (move, timestamp) {
+      _moveHistory.add(move);
+      notifyListeners();
+    };
   }
 
-  /// キューブの接続を開始
-  Future<bool> connectToCube(BluetoothDeviceInfo device) async {
-    try {
-      _connectionState = CubeConnectionState.connecting;
-      _isConnecting = true;
-      _errorMessage = null;
+  /// ソルブの状態をチェック
+  void _checkSolveStatus() {
+    if (_currentState == null) return;
+
+    // ソルブ開始判定
+    if (_solveStartTime == null && !_currentState!.isSolved) {
+      _solveStartTime = DateTime.now();
       notifyListeners();
-
-      final connected = await _bluetoothService.connectToDevice(device);
-      if (!connected) {
-        throw Exception('キューブとの接続に失敗しました');
-      }
-
-      // GAN Cubeのサービスを取得
-      _service = await _bluetoothService.discoverService(
-        device,
-        BluetoothInterface.GAN_SERVICE_UUID,
-      );
-
-      if (_service == null) {
-        throw Exception('GAN Cubeのサービスが見つかりません');
-      }
-
-      // 通知を購読
-      final notificationStream = _bluetoothService.subscribeToCharacteristic(
-        _service,
-        BluetoothInterface.GAN_CHARACTERISTIC_READ,
-      );
-
-      if (notificationStream == null) {
-        throw Exception('通知の購読に失敗しました');
-      }
-
-      _notificationSubscription = notificationStream.listen(
-        _handleCubeState,
-        onError: _handleError,
-      );
-
-      _connectionState = CubeConnectionState.connected;
-      _connectedDevice = device;
-      _isConnecting = false;
-      
-      // バッテリー残量を取得
-      await _requestBatteryLevel();
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _handleError(e);
-      return false;
     }
-  }
-
-  /// キューブとの接続を切断
-  Future<void> disconnect() async {
-    await _notificationSubscription?.cancel();
-    _notificationSubscription = null;
-    await _bluetoothService.disconnect();
-    _service = null;
-    _connectedDevice = null;
-    _connectionState = CubeConnectionState.disconnected;
-    _currentCubeState = CubeState.solved();
-    _moveHistory.clear();
-    _solveStartTime = null;
-    _solveEndTime = null;
-    _batteryLevel = 0;
-    _isConnecting = false;
-    notifyListeners();
+    // ソルブ完了判定
+    else if (_solveStartTime != null && _currentState!.isSolved) {
+      _solveEndTime = DateTime.now();
+      notifyListeners();
+    }
   }
 
   /// ソルブをリセット
   void resetSolve() {
-    _moveHistory.clear();
     _solveStartTime = null;
     _solveEndTime = null;
+    _moveHistory.clear();
     notifyListeners();
   }
 
-  /// スクランブルを実行
+  /// スクランブル手順を生成
   Future<List<Move>> scrambleCube(int moveCount) async {
-    if (!isConnected || _service == null) {
-      return [];
-    }
+    if (!_isConnected) return [];
 
-    final random = Random();
-    final baseTypes = [
-      MoveType.U, MoveType.D, MoveType.R, 
-      MoveType.L, MoveType.F, MoveType.B
-    ];
-    final moves = <Move>[];
-    MoveType? lastMove;
-
-    // スクランブルのムーブを生成
-    for (var i = 0; i < moveCount; i++) {
-      MoveType moveType;
-      do {
-        moveType = baseTypes[random.nextInt(baseTypes.length)];
-      } while (lastMove != null && moveType.toString()[0] == lastMove.toString()[0]);
-
-      // ランダムに回転方向を決定（通常、逆回転、180度）
-      final variation = random.nextInt(3);
-      if (variation == 1) {
-        moveType = MoveType.values[moveType.index + 1]; // Prime
-      } else if (variation == 2) {
-        moveType = MoveType.values[moveType.index + 2]; // 2
-      }
-
-      moves.add(Move(
-        type: moveType,
-        timestamp: DateTime.now(),
-      ));
-      lastMove = moveType;
-    }
-
-    // スクランブルを実行
     try {
-      final command = _bluetoothService.createScrambleCommand(moves);
-      await _bluetoothService.writeCharacteristic(
-        _service,
-        BluetoothInterface.GAN_CHARACTERISTIC_WRITE,
-        command,
-      );
-      debugPrint('スクランブルを実行: ${moves.map((m) => m.toString()).join(" ")}');
+      // スクランブル手順を生成
+      final moves = generateScramble(moveCount);
+      
+      // 現在の状態を保存
+      final prevState = _currentState;
+      
+      // スクランブルが開始されたことを記録
+      resetSolve();
+      
+      // スクランブル手順をUIに表示するために返す
       return moves;
     } catch (e) {
-      debugPrint('スクランブル実行エラー: $e');
+      debugPrint('スクランブル生成エラー: $e');
       return [];
     }
   }
 
-  /// キューブの状態を処理
-  void _handleCubeState(List<int> data) {
-    try {
-      if (data.isEmpty) return;
+  /// スクランブル手順を生成
+  List<Move> generateScramble(int moveCount) {
+    final moves = <Move>[];
+    final random = DateTime.now().millisecondsSinceEpoch;
+    
+    MoveType? lastMove;
+    MoveType? secondLastMove;
+    
+    for (var i = 0; i < moveCount; i++) {
+      MoveType move;
+      do {
+        // 同じ面の連続を避ける
+        move = MoveType.values[(random + i * 3) % MoveType.values.length];
+      } while (_isInvalidMove(move, lastMove, secondLastMove));
+      
+      moves.add(Move(
+        type: move,
+        timestamp: DateTime.now(),
+      ));
+      
+      secondLastMove = lastMove;
+      lastMove = move;
+    }
+    return moves;
+  }
 
-      // gancube.jsのデータ形式に合わせて解析
-      if (data.length >= 7) {
-        switch (data[1]) {
-          case BluetoothInterface.V4_GET_BATTERY:
-            if (data.length >= 8) {
-              _batteryLevel = data[7];
-              debugPrint('バッテリー残量: $_batteryLevel%');
-              notifyListeners();
-            }
-            break;
-
-          case BluetoothInterface.V4_FACE_STATUS:
-            if (data.length >= 14) {
-              // 前の状態を保持
-              final oldState = _currentCubeState;
-              
-              // V4のデータ形式に基づいてキューブの状態を更新
-              final faceData = data.sublist(7, 14);
-              final newState = CubeState.fromV4Data(faceData);
-              _currentCubeState = newState;
-
-              // 状態が変化した場合の処理
-              if (_solveStartTime == null && !oldState.isSolved) {
-                _solveStartTime = DateTime.now();
-              }
-
-              if (newState.isSolved && !oldState.isSolved) {
-                _solveEndTime = DateTime.now();
-                debugPrint('ソルブ完了！ 経過時間: ${_solveEndTime!.difference(_solveStartTime!).inSeconds}秒');
-              }
-
-              notifyListeners();
-            }
-            break;
-        }
+  /// 無効な手順かどうかをチェック
+  bool _isInvalidMove(MoveType move, MoveType? lastMove, MoveType? secondLastMove) {
+    if (lastMove == null) return false;
+    
+    // 同じ面の連続を避ける
+    final currentFace = move.toString().substring(0, 1);
+    final lastFace = lastMove.toString().substring(0, 1);
+    if (currentFace == lastFace) return true;
+    
+    // 対面の3手連続を避ける
+    if (secondLastMove != null) {
+      final secondLastFace = secondLastMove.toString().substring(0, 1);
+      if (_isOppositeFaces(currentFace, lastFace) && 
+          _isOppositeFaces(lastFace, secondLastFace)) {
+        return true;
       }
+    }
+    
+    return false;
+  }
+
+  /// 対面かどうかをチェック
+  bool _isOppositeFaces(String face1, String face2) {
+    const opposites = {
+      'U': 'D', 'D': 'U',
+      'R': 'L', 'L': 'R',
+      'F': 'B', 'B': 'F',
+    };
+    return opposites[face1] == face2;
+  }
+
+  /// キューブに接続
+  Future<bool> connectToCube(BluetoothDeviceInfo device) async {
+    if (_isConnecting) return false;
+    
+    try {
+      _isConnecting = true;
+      notifyListeners();
+
+      // Bluetooth接続を確立
+      final success = await _bluetooth.connectToDevice(device);
+      if (!success) {
+        debugPrint('Bluetooth接続に失敗');
+        return false;
+      }
+
+      _connectedDevice = device;
+
+      // サービスの検出
+      final service = await _bluetooth.discoverService(
+        device.nativeDevice, 
+        BluetoothInterface.GAN_SERVICE_UUID,
+      );
+      if (service == null) {
+        debugPrint('サービスが見つかりません');
+        return false;
+      }
+
+      // 通知の購読開始
+      final dataStream = _bluetooth.subscribeToCharacteristic(
+        service,
+        'fff6', // 短縮UUID使用
+      );
+      if (dataStream == null) {
+        debugPrint('通知の購読に失敗');
+        return false;
+      }
+
+      // データの監視を開始
+      dataStream.listen((data) {
+        _protocol.processDataPacket(data);
+      });
+
+      // デコーダの初期化
+      final macAddress = device.id;
+      debugPrint('デコーダを初期化: MAC=$macAddress');
+       _protocol.initializeDecoder(macAddress);
+
+      // 初期データの要求
+      await _requestInitialData();
+
+      _isConnected = true;
+      notifyListeners();
+      return true;
+
     } catch (e) {
-      debugPrint('キューブの状態解析エラー: $e');
+      debugPrint('接続エラー: $e');
+      await disconnect();
+      return false;
+    } finally {
+      _isConnecting = false;
+      notifyListeners();
+    }
+  }
+
+  /// キューブから切断
+  Future<void> disconnect() async {
+    try {
+      await _bluetooth.disconnect();
+    } finally {
+      _isConnected = false;
+      _connectedDevice = null;
+      _currentState = null;
+      _batteryLevel = 0;
+      _moveHistory.clear();
+      _solveStartTime = null;
+      _solveEndTime = null;
+      notifyListeners();
+    }
+  }
+
+  /// 初期データを要求
+  Future<void> _requestInitialData() async {
+    if (!_isConnected) return;
+
+    try {
+      // ハードウェア情報を要求
+      final hwCommand = _protocol.createHardwareCommand();
+      await _bluetooth.writeCharacteristic(
+        _connectedDevice!,
+        'fff5', // 短縮UUID使用
+        hwCommand,
+      );
+
+      // キューブの状態を要求
+      requestCubeState();
+
+      // バッテリー残量を要求
+      requestBatteryLevel();
+    } catch (e) {
+      debugPrint('初期データ要求エラー: $e');
     }
   }
 
   /// バッテリー残量を要求
-  Future<void> _requestBatteryLevel() async {
-    try {
-      if (_service == null) return;
+  Future<void> requestBatteryLevel() async {
+    if (!_isConnected) return;
 
-      final command = _bluetoothService.createBatteryCommand();
-      await _bluetoothService.writeCharacteristic(
-        _service,
-        BluetoothInterface.GAN_CHARACTERISTIC_WRITE,
-        command,
-      );
-    } catch (e) {
-      debugPrint('バッテリー残量要求エラー: $e');
-    }
+    final command = _protocol.createBatteryCommand();
+    await _bluetooth.writeCharacteristic(
+      _connectedDevice!,
+      'fff5', // 短縮UUID使用
+      command,
+    );
   }
 
-  /// エラーを処理
-  void _handleError(dynamic error) {
-    debugPrint('エラーが発生しました: $error');
-    _errorMessage = error.toString();
-    _connectionState = CubeConnectionState.error;
-    _isConnecting = false;
-    notifyListeners();
+  /// キューブの状態を要求
+  Future<void> requestCubeState() async {
+    if (!_isConnected) return;
+
+    final command = _protocol.createFaceletsCommand();
+    await _bluetooth.writeCharacteristic(
+      _connectedDevice!,
+      'fff5', // 短縮UUID使用
+      command,
+    );
   }
 
   @override

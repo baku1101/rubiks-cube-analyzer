@@ -7,8 +7,8 @@ class CubeBluetoothService extends ChangeNotifier {
   // UUID定数
   static const String UUID_SUFFIX = '-0000-1000-8000-00805f9b34fb';
   static const String SERVICE_UUID_V4 = '00000010-0000-fff7-fff6-fff5fff4fff0';
-  static const String CHARACTERISTIC_UUID_NOTIFY = '0000fff6' + UUID_SUFFIX;
-  static const String CHARACTERISTIC_UUID_WRITE = '0000fff5' + UUID_SUFFIX;
+  static const String CHARACTERISTIC_UUID_NOTIFY = '0000fff6$UUID_SUFFIX';
+  static const String CHARACTERISTIC_UUID_WRITE = '0000fff5$UUID_SUFFIX';
 
   fbpw.BluetoothDevice? _connectedDevice;
   bool _isScanning = false;

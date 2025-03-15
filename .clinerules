@@ -1,0 +1,113 @@
+# 基本ルール
+max_context_tokens: 8192
+max_target_tokens: 4096
+
+# ファイルグループの定義
+groups:
+  bluetooth:
+    - lib/services/bluetooth_*.dart
+    - lib/models/bluetooth_*.dart
+    - test/bluetooth_*.dart
+
+  cube_core:
+    - lib/services/gan_cube_*.dart
+    - lib/services/cube_*.dart
+    - lib/models/cube_*.dart
+    - lib/models/move.dart
+    - test/cube_*.dart
+
+  ui:
+    - lib/screens/*.dart
+    - lib/widgets/*.dart
+    - test/widget_*.dart
+
+# TDD関連の設定
+tdd_rules:
+  # 新規ファイル作成時のルール
+  - when: creating lib/**/*.dart
+    create_test: test/${path}/test_${name}.dart
+    template: test_template
+
+  # テストファイル編集時のルール
+  - when: editing test/**/*_test.dart
+    include:
+      - ${corresponding_source}
+      - test/helpers/*.dart
+      - test/mocks/*.dart
+
+  # モック生成ルール
+  - when: editing lib/services/*.dart
+    create_mock: test/mocks/mock_${name}.dart
+    template: mock_template
+
+# 特定のファイル編集時のコンテキストルール
+rules:
+  - when: editing lib/services/cube_connection_service.dart
+    include:
+      - lib/services/bluetooth_interface.dart
+      - lib/services/gan_cube_protocol.dart
+      - lib/services/gan_cube_decoder.dart
+      - lib/models/bluetooth_device_info.dart
+      - lib/models/cube_state.dart
+      - lib/models/move.dart
+      - test/services/cube_connection_service_test.dart
+      - test/mocks/mock_bluetooth_interface.dart
+
+  - when: editing lib/services/gan_cube_protocol.dart
+    include:
+      - lib/services/gan_cube_decoder.dart
+      - lib/models/cube_state.dart
+      - lib/models/move.dart
+      - test/services/gan_cube_protocol_test.dart
+      - test/mocks/mock_gan_cube_decoder.dart
+
+  - when: editing lib/screens/*_screen.dart
+    include:
+      - lib/services/cube_connection_service.dart
+      - lib/services/cube_state_updater.dart
+      - test/screens/${name}_test.dart
+      - test/mocks/mock_cube_connection_service.dart
+
+# 参照ファイルのプリオリティ
+priorities:
+  - pattern: test/**/*_test.dart
+    priority: highest
+  - pattern: lib/models/*.dart
+    priority: high
+  - pattern: lib/services/*.dart
+    priority: high
+  - pattern: test/mocks/*.dart
+    priority: normal
+
+# 除外パターン
+exclude:
+  - .dart_tool/**
+  - build/**
+  - windows/**
+  - test/generated/**
+
+# テンプレート定義
+templates:
+  test_template: |
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:mockito/mockito.dart';
+    import '../lib/${path}/${name}.dart';
+
+    void main() {
+      group('${class_name}', () {
+        test('初期化', () {
+          // Arrange
+          
+          // Act
+          
+          // Assert
+          
+        });
+      });
+    }
+
+  mock_template: |
+    import 'package:mockito/mockito.dart';
+    import '../../lib/${path}/${name}.dart';
+
+    class Mock${class_name} extends Mock implements ${class_name} {}

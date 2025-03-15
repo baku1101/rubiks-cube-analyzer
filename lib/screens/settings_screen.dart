@@ -127,10 +127,10 @@ class SettingsScreen extends StatelessWidget {
     final cubeService = Provider.of<CubeConnectionService>(context);
     
     if (!cubeService.isConnected) {
-      return ListTile(
-        title: const Text('接続されたキューブ'),
-        subtitle: const Text('キューブが接続されていません'),
-        leading: const Icon(Icons.bluetooth_disabled),
+      return const ListTile(
+        title: Text('接続されたキューブ'),
+        subtitle: Text('キューブが接続されていません'),
+        leading: Icon(Icons.bluetooth_disabled),
       );
     }
     

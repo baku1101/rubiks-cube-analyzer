@@ -213,11 +213,7 @@ class WindowsBluetoothService extends ChangeNotifier implements BluetoothInterfa
         return false;
       }
 
-      final fullUuid = characteristicUuid.length == 4 
-        ? '0000$characteristicUuid-0000-1000-8000-00805f9b34fb'
-        : characteristicUuid;
-
-      debugPrint('書き込む特性を探索: $fullUuid');
+      debugPrint('書き込む特性を探索: $characteristicUuid');
 
       // 特性を探索
       final characteristics = service.characteristics.where((c) {
@@ -225,11 +221,11 @@ class WindowsBluetoothService extends ChangeNotifier implements BluetoothInterfa
         debugPrint('特性を確認中:');
         debugPrint('  UUID: $uuid');
         debugPrint('  プロパティ: ${c.properties}');
-        return uuid == fullUuid.toUpperCase();
+        return uuid == characteristicUuid.toUpperCase();
       }).toList();
 
       if (characteristics.isEmpty) {
-        debugPrint('書き込み用特性が見つかりません: $fullUuid');
+        debugPrint('書き込み用特性が見つかりません: $characteristicUuid');
         return false;
       }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/cube_connection_service.dart';
-import '../models/cube_state.dart';
 import '../models/move.dart';
 import '../widgets/cube_view_widget.dart';
 
@@ -97,9 +96,9 @@ class AnalysisScreen extends StatelessWidget {
     final milliseconds = duration.inMilliseconds % 1000;
     
     if (minutes > 0) {
-      return '${minutes}:${seconds.toString().padLeft(2, '0')}.${(milliseconds ~/ 10).toString().padLeft(2, '0')}';
+      return '$minutes:${seconds.toString().padLeft(2, '0')}.${(milliseconds ~/ 10).toString().padLeft(2, '0')}';
     } else {
-      return '${seconds}.${(milliseconds ~/ 10).toString().padLeft(2, '0')}';
+      return '$seconds.${(milliseconds ~/ 10).toString().padLeft(2, '0')}';
     }
   }
 }

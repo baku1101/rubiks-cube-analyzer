@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 // 回転の種類を定義
 enum MoveType {

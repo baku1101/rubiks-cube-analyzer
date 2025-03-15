@@ -119,19 +119,15 @@ class BluetoothDeviceInfo {
             ),
           );
 
-          if (requestDevice == null) return false;
-
           // GATTサーバーに接続
           final server = requestDevice.gatt;
           if (server == null) return false;
 
           // サービスを取得
           final service = await server.getPrimaryService(serviceUuid);
-          if (service == null) return false;
 
           // キャラクタリスティックを取得して書き込み
           final characteristic = await service.getCharacteristic(characteristicUuid);
-          if (characteristic == null) return false;
 
           await characteristic.writeValue(Uint8List.fromList(data));
           return true;

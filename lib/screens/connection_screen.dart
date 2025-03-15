@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus_windows/flutter_blue_plus_windows.dart';
 import 'package:rubiks_cube_analyzer/services/bluetooth_interface.dart';
-import '../services/bluetooth_service.dart';
 import '../services/cube_connection_service.dart';
 
 class ConnectionScreen extends StatefulWidget {
