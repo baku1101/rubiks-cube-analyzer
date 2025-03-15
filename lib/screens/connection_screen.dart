@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus_windows/flutter_blue_plus_windows.dart';
+import 'package:rubiks_cube_analyzer/services/bluetooth_interface.dart';
 import '../services/bluetooth_service.dart';
 import '../services/cube_connection_service.dart';
 
@@ -13,12 +14,12 @@ class ConnectionScreen extends StatefulWidget {
 
 class _ConnectionScreenState extends State<ConnectionScreen> {
   bool _isInitializing = true;
-  late final CubeBluetoothService _bluetoothService;
+  late final BluetoothInterface _bluetoothService;
 
   @override
   void initState() {
     super.initState();
-    _bluetoothService = context.read<CubeBluetoothService>();
+    _bluetoothService = context.read<BluetoothInterface>();
     _checkBluetoothStatus();
   }
 
@@ -75,7 +76,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bluetoothService = context.watch<CubeBluetoothService>();
+    final bluetoothService = context.watch<BluetoothInterface>();
     
     return Scaffold(
       appBar: AppBar(
@@ -83,14 +84,14 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       ),
       body: _isInitializing
           ? const Center(child: CircularProgressIndicator())
-          : bluetoothService.adapterState != BluetoothAdapterState.on
-              ? _buildBluetoothOffScreen(bluetoothService.adapterState)
+          // : bluetoothService.adapterState != BluetoothAdapterState.on
+          //     ? _buildBluetoothOffScreen(bluetoothService.adapterState)
               : _buildScanningView(),
     );
   }
 
   Widget _buildScanningView() {
-    final bluetoothService = context.watch<CubeBluetoothService>();
+    final bluetoothService = context.watch<BluetoothInterface>();
     
     return Column(
       children: [
@@ -146,7 +147,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   }
 
   Widget _buildEmptyListView() {
-    final bluetoothService = context.watch<CubeBluetoothService>();
+    final bluetoothService = context.watch<BluetoothInterface>();
     
     return Center(
       child: Column(
@@ -179,7 +180,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   }
 
   Widget _buildDeviceListView() {
-    final bluetoothService = context.watch<CubeBluetoothService>();
+    final bluetoothService = context.watch<BluetoothInterface>();
     final cubeConnectionService = context.watch<CubeConnectionService>();
     
     return ListView.builder(

@@ -1,237 +1,199 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus_windows/flutter_blue_plus_windows.dart';
+import 'package:flutter_blue_plus_windows/flutter_blue_plus_windows.dart' as fbpw;
 import '../models/bluetooth_device_info.dart';
 
 class CubeBluetoothService extends ChangeNotifier {
-  final Set<BluetoothDeviceInfo> _scanResults = {};
-  StreamSubscription? _scanResultsSubscription;
+  // UUID定数
+  static const String UUID_SUFFIX = '-0000-1000-8000-00805f9b34fb';
+  static const String SERVICE_UUID_V4 = '00000010-0000-fff7-fff6-fff5fff4fff0';
+  static const String CHARACTERISTIC_UUID_NOTIFY = '0000fff6' + UUID_SUFFIX;
+  static const String CHARACTERISTIC_UUID_WRITE = '0000fff5' + UUID_SUFFIX;
+
+  fbpw.BluetoothDevice? _connectedDevice;
   bool _isScanning = false;
-  BluetoothDeviceInfo? _connectedDevice;
-  StreamSubscription? _connectionSubscription;
-  BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
+  StreamSubscription<List<fbpw.ScanResult>>? _scanSubscription;
+  List<BluetoothDeviceInfo> _scanResults = [];
+  fbpw.BluetoothAdapterState _adapterState = fbpw.BluetoothAdapterState.unknown;
 
   CubeBluetoothService() {
-    FlutterBluePlus.setLogLevel(LogLevel.verbose, color: true);
-    _initializeBluetoothState();
+    _initBluetooth();
   }
 
-  void _initializeBluetoothState() {
-    FlutterBluePlus.adapterState.listen((state) {
+  // Getters
+  bool get isScanning => _isScanning;
+  bool get isConnected => _connectedDevice != null;
+  List<BluetoothDeviceInfo> get scanResults => List.unmodifiable(_scanResults);
+  fbpw.BluetoothAdapterState get adapterState => _adapterState;
+  BluetoothDeviceInfo? get connectedDevice => _connectedDevice != null 
+    ? BluetoothDeviceInfo(
+        nativeDevice: _connectedDevice!,
+        name: _connectedDevice!.name,
+        id: _connectedDevice!.id.toString(),
+        rssi: -50,
+      )
+    : null;
+
+  // Bluetoothの初期化
+  Future<void> _initBluetooth() async {
+    fbpw.FlutterBluePlus.adapterState.listen((state) {
       _adapterState = state;
       notifyListeners();
     });
   }
 
-  List<BluetoothDeviceInfo> get scanResults => List.unmodifiable(_scanResults.toList());
-  BluetoothDeviceInfo? get connectedDevice => _connectedDevice;
-  bool get isConnected => _connectedDevice != null;
-  bool get isScanning => _isScanning;
-  BluetoothAdapterState get adapterState => _adapterState;
-
-  Future<bool> isBluetoothOn() async {
-    try {
-      final isSupported = await FlutterBluePlus.isSupported;
-      if (!isSupported) {
-        debugPrint('Bluetoothはこのデバイスでサポートされていません');
-        return false;
-      }
-
-      return _adapterState == BluetoothAdapterState.on;
-    } catch (e) {
-      debugPrint('Bluetooth状態確認エラー: $e');
-      return false;
-    }
-  }
-
+  // スキャンを開始
   Future<void> startScan() async {
     if (_isScanning) return;
+    _isScanning = true;
+    _scanResults.clear();
+    notifyListeners();
 
     try {
-      _scanResults.clear();
-      _isScanning = true;
-      notifyListeners();
-
-      await FlutterBluePlus.stopScan();
+      await fbpw.FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
       
-      final scanTimeout = const Duration(seconds: 15);
-      _scanResultsSubscription = FlutterBluePlus.scanResults
-        .expand((results) => results)
-        .listen(
-          (result) {
-            // 名前が空のデバイスはスキップ
-            if (result.device.platformName.isEmpty) return;
-            
-            final deviceInfo = BluetoothDeviceInfo(
-              name: result.device.platformName,
-              id: result.device.remoteId.str,
-              nativeDevice: result.device,
-              rssi: result.rssi,
-            );
-            
-            // デバイス情報を更新または追加
-            _scanResults.removeWhere((device) => device.id == deviceInfo.id);
-            _scanResults.add(deviceInfo);
-            notifyListeners();
-          },
-          onError: (e) {
-            debugPrint('スキャンエラー: $e');
-            stopScan();
-          }
-        );
+      _scanSubscription = fbpw.FlutterBluePlus.scanResults.listen((results) {
+        _scanResults = results
+          .where((result) => result.device.name.isNotEmpty)
+          .map((result) => BluetoothDeviceInfo.fromWindowsDevice(result))
+          .toList();
+        notifyListeners();
+      });
 
-      await FlutterBluePlus.startScan(
-        timeout: scanTimeout,
-        // AndroidのScanModeはWindowsでは利用できないため削除
-      );
+      await Future.delayed(const Duration(seconds: 4));
+      await stopScan();
     } catch (e) {
-      debugPrint('スキャン開始エラー: $e');
+      debugPrint('スキャンエラー: $e');
       _isScanning = false;
       notifyListeners();
     }
   }
 
+  // スキャンを停止
   Future<void> stopScan() async {
     if (!_isScanning) return;
 
     try {
-      await _scanResultsSubscription?.cancel();
-      _scanResultsSubscription = null;
-      await FlutterBluePlus.stopScan();
-    } catch (e) {
-      debugPrint('スキャン停止エラー: $e');
+      await fbpw.FlutterBluePlus.stopScan();
+      await _scanSubscription?.cancel();
+      _scanSubscription = null;
     } finally {
       _isScanning = false;
       notifyListeners();
     }
   }
 
+  // デバイスに接続
   Future<bool> connectToDevice(BluetoothDeviceInfo device) async {
-    if (_connectedDevice != null) {
-      await disconnect();
-    }
-    
     try {
-      await device.nativeDevice.connect(
-        timeout: const Duration(seconds: 10),
-      );
-      
-      _connectionSubscription = device.nativeDevice.connectionState.listen(
-        (state) {
-          if (state == BluetoothConnectionState.disconnected) {
-            disconnect();
-          }
-        },
-        onError: (error) {
-          debugPrint('接続状態監視エラー: $error');
-          disconnect();
-        },
-      );
-      
-      _connectedDevice = device;
+      debugPrint('デバイス接続開始: ${device.name} (${device.id})');
+      await device.nativeDevice.connect(timeout: const Duration(seconds: 10));
+      _connectedDevice = device.nativeDevice;
       notifyListeners();
+      debugPrint('デバイス接続成功');
       return true;
     } catch (e) {
-      debugPrint('デバイス接続エラー: $e');
+      debugPrint('接続エラー: $e');
       return false;
     }
   }
 
+  // デバイスから切断
   Future<void> disconnect() async {
-    await _connectionSubscription?.cancel();
-    _connectionSubscription = null;
+    if (_connectedDevice == null) return;
     
-    if (_connectedDevice != null) {
-      try {
-        await _connectedDevice!.nativeDevice.disconnect();
-      } catch (e) {
-        debugPrint('デバイス切断エラー: $e');
-      }
-      
+    try {
+      await _connectedDevice!.disconnect();
+    } finally {
       _connectedDevice = null;
       notifyListeners();
     }
   }
 
-  Future<BluetoothService?> discoverService(
-    BluetoothDevice device, 
+  // サービスを探索
+  Future<fbpw.BluetoothService?> discoverService(
+    fbpw.BluetoothDevice device,
     String serviceUuid,
   ) async {
     try {
-      // UUIDを正規化
-      final normalizedSearchUuid = serviceUuid.replaceAll('-', '').toLowerCase();
-      debugPrint('探索するサービスUUID: $normalizedSearchUuid');
+      debugPrint('探索するサービスUUID: $serviceUuid');
       
-      // 接続後のサービス検索のために少し待機
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // サービスの探索前に少し待機
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // 最大3回まで試行
-      for (var i = 0; i < 3; i++) {
-        try {
-          final services = await device.discoverServices();
-          for (final service in services) {
-            final normalizedUuid = service.uuid.str.replaceAll('-', '').toLowerCase();
-            debugPrint('検出されたサービス: $normalizedUuid (元のUUID: ${service.uuid.str})');
+      fbpw.BluetoothService? foundService;
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        final services = await device.discoverServices();
+        debugPrint('発見されたサービス数: ${services.length}');
+        
+        // すべてのサービスの情報をデバッグ出力
+        for (final service in services) {
+          debugPrint('検出されたサービス: ${service.uuid}');
+          debugPrint('  特性の数: ${service.characteristics.length}');
+          
+          // サービスが一致した場合
+          if (service.uuid.toString().toUpperCase() == serviceUuid.toUpperCase()) {
+            debugPrint('サービスが見つかりました！');
+            
+            if (service.characteristics.isEmpty && attempt < 3) {
+              debugPrint('特性が空のため再探索を試みます (試行 $attempt)');
+              await Future.delayed(const Duration(milliseconds: 500));
+              continue;
+            }
+            
+            foundService = service;
+            break;
           }
-          
-          final service = services.firstWhere(
-            (s) => s.uuid.str.replaceAll('-', '').toLowerCase() == normalizedSearchUuid,
-            orElse: () => throw Exception('Service not found'),
-          );
-          
-          debugPrint('サービスが見つかりました: ${service.uuid.str}');
-          return service;
-        } catch (e) {
-          if (i == 2) rethrow; // 最後の試行で失敗した場合は例外を投げる
-          debugPrint('試行 ${i + 1} 失敗: $e');
-          await Future.delayed(const Duration(milliseconds: 500)); // 次の試行までの待機
-          continue;
+        }
+        
+        if (foundService != null) break;
+        
+        if (attempt < 3) {
+          debugPrint('サービスが見つからないため再探索を試みます (試行 $attempt)');
+          await Future.delayed(const Duration(milliseconds: 500));
         }
       }
-      
-      throw Exception('Service not found after retries');
+
+      return foundService;
     } catch (e) {
-      debugPrint('サービス検索エラー: $e');
+      debugPrint('サービス探索エラー: $e');
       return null;
     }
   }
 
-  Future<bool> writeCharacteristic(
-    BluetoothService service,
-    String characteristicUuid,
-    Uint8List data,
-  ) async {
-    try {
-      final normalizedSearchUuid = characteristicUuid.replaceAll('-', '').toLowerCase();
-      final characteristic = service.characteristics.firstWhere(
-        (c) => c.uuid.str.replaceAll('-', '').toLowerCase() == normalizedSearchUuid,
-      );
-      await characteristic.write(data);
-      return true;
-    } catch (e) {
-      debugPrint('特性書き込みエラー: $e');
-      return false;
-    }
-  }
-
-  Stream<List<dynamic>>? subscribeToCharacteristic(
-    BluetoothService service,
+  // 特性をサブスクライブ
+  Stream<List<int>>? subscribeToCharacteristic(
+    fbpw.BluetoothService service,
     String characteristicUuid,
   ) {
     try {
-      final normalizedSearchUuid = characteristicUuid.replaceAll('-', '').toLowerCase();
-      debugPrint('探索する特性UUID: $normalizedSearchUuid');
+      final fullUuid = characteristicUuid.length == 4 
+        ? '0000$characteristicUuid$UUID_SUFFIX'
+        : characteristicUuid;
       
-      debugPrint('利用可能な特性:');
-      for (final c in service.characteristics) {
-        final normalizedUuid = c.uuid.str.replaceAll('-', '').toLowerCase();
-        debugPrint('- $normalizedUuid (元のUUID: ${c.uuid.str})');
+      debugPrint('特性を探索中: $fullUuid');
+      
+      // 特性を探索
+      final characteristics = service.characteristics.where((c) {
+        final uuid = c.uuid.toString().toUpperCase();
+        debugPrint('特性を確認中:');
+        debugPrint('  UUID: $uuid');
+        debugPrint('  プロパティ: ${c.properties}');
+        return uuid == fullUuid.toUpperCase();
+      }).toList();
+
+      if (characteristics.isEmpty) {
+        debugPrint('特性が見つかりません: $fullUuid');
+        return null;
       }
-      
-      final characteristic = service.characteristics.firstWhere(
-        (c) => c.uuid.str.replaceAll('-', '').toLowerCase() == normalizedSearchUuid,
-      );
+
+      final characteristic = characteristics.first;
+      debugPrint('特性が見つかりました: ${characteristic.uuid}');
+
+      // 通知を有効化
       characteristic.setNotifyValue(true);
+      
+      // 値の変更をストリームとして返す
       return characteristic.lastValueStream;
     } catch (e) {
       debugPrint('特性サブスクライブエラー: $e');
@@ -239,11 +201,48 @@ class CubeBluetoothService extends ChangeNotifier {
     }
   }
 
+  // 特性に書き込み
+  Future<void> writeCharacteristic(
+    fbpw.BluetoothService service,
+    String characteristicUuid,
+    List<int> value,
+  ) async {
+    try {
+      final fullUuid = characteristicUuid.length == 4 
+        ? '0000$characteristicUuid$UUID_SUFFIX'
+        : characteristicUuid;
+      
+      debugPrint('書き込む特性を探索: $fullUuid');
+      
+      // 特性を探索
+      final characteristics = service.characteristics.where((c) {
+        final uuid = c.uuid.toString().toUpperCase();
+        debugPrint('特性を確認中:');
+        debugPrint('  UUID: $uuid');
+        debugPrint('  プロパティ: ${c.properties}');
+        return uuid == fullUuid.toUpperCase();
+      }).toList();
+
+      if (characteristics.isEmpty) {
+        debugPrint('書き込み用特性が見つかりません: $fullUuid');
+        return;
+      }
+
+      final characteristic = characteristics.first;
+      debugPrint('書き込み用特性が見つかりました: ${characteristic.uuid}');
+      debugPrint('書き込むデータ: ${value.map((b) => '0x${b.toRadixString(16)}').join(', ')}');
+
+      await characteristic.write(value);
+      debugPrint('データ書き込み成功');
+    } catch (e) {
+      debugPrint('特性書き込みエラー: $e');
+    }
+  }
+
   @override
   void dispose() {
-    stopScan();
-    _scanResultsSubscription?.cancel();
-    _connectionSubscription?.cancel();
+    _scanSubscription?.cancel();
+    disconnect();
     super.dispose();
   }
 }

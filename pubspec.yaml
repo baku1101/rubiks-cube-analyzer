@@ -1,29 +1,30 @@
 name: rubiks_cube_analyzer
-description: A multi-platform application for analyzing and solving the Rubik's Cube using GAN12 UI Maglev.
-
+description: Rubik's Cube Analyzer using GAN Smart Cube
 publish_to: 'none'
-
-version: 1.0.0+1
+version: 0.1.0
 
 environment:
-  sdk: '>=2.17.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_blue_plus: ^1.34.5 
-  flutter_blue_plus_windows: ^1.26.1
-  provider: ^6.1.1
-  win32: ^5.2.0
-  ffi: ^2.1.0
+  cupertino_icons: ^1.0.2
+  provider: ^6.0.5
+  flutter_blue_plus_windows: ^1.14.2
+  flutter_web_bluetooth: ^1.0.0
+  js: ^0.6.7
+  encrypt: ^5.0.3
+  lzstring: ^2.0.0+2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
-
+  
   assets:
     - assets/images/
     - assets/icons/

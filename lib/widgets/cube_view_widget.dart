@@ -1,62 +1,85 @@
 import 'package:flutter/material.dart';
-import '../models/cube_state.dart' as model;
+import '../models/cube_state.dart';
 import 'cube_face_widget.dart';
 
 class CubeViewWidget extends StatelessWidget {
-  final model.CubeState cubeState;
-  final double faceSize;
+  final CubeState cubeState;
+  final double size;
+  final Map<Face, VoidCallback>? onFaceTap;
 
   const CubeViewWidget({
-    Key? key,
+    super.key,
     required this.cubeState,
-    this.faceSize = 100.0,
-  }) : super(key: key);
+    required this.size,
+    this.onFaceTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return SizedBox(
+      width: size * 4,
+      height: size * 3,
+      child: Stack(
         children: [
-          // 上面
-          _buildFaceWithLabel('上面 (U)', model.Face.up),
-          
-          // 中央の行（左、前、右、後）
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildFaceWithLabel('左面 (L)', model.Face.left),
-                _buildFaceWithLabel('前面 (F)', model.Face.front),
-                _buildFaceWithLabel('右面 (R)', model.Face.right),
-                _buildFaceWithLabel('後面 (B)', model.Face.back),
-              ],
+          // 上面（上から2番目、左から2番目）
+          Positioned(
+            top: size,
+            left: size,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.up),
+              size: size,
+              onTap: onFaceTap?[Face.up],
             ),
           ),
-          
-          // 下面
-          _buildFaceWithLabel('下面 (D)', model.Face.down),
-        ],
-      ),
-    );
-  }
-
-  // ラベル付きの面ウィジェットを構築
-  Widget _buildFaceWithLabel(String label, model.Face face) {
-    return Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          // 左面（上から2番目、左端）
+          Positioned(
+            top: size,
+            left: 0,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.left),
+              size: size,
+              onTap: onFaceTap?[Face.left],
+            ),
           ),
-          const SizedBox(height: 4),
-          CubeFaceWidget(
-            faceState: cubeState.getFace(face),
-            size: faceSize,
+          // 前面（上から2番目、左から2番目）
+          Positioned(
+            top: size,
+            left: size,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.front),
+              size: size,
+              onTap: onFaceTap?[Face.front],
+            ),
+          ),
+          // 右面（上から2番目、左から3番目）
+          Positioned(
+            top: size,
+            left: size * 2,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.right),
+              size: size,
+              onTap: onFaceTap?[Face.right],
+            ),
+          ),
+          // 後面（上から2番目、左から4番目）
+          Positioned(
+            top: size,
+            left: size * 3,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.back),
+              size: size,
+              onTap: onFaceTap?[Face.back],
+            ),
+          ),
+          // 下面（一番下、左から2番目）
+          Positioned(
+            top: size * 2,
+            left: size,
+            child: CubeFaceWidget(
+              colors: cubeState.getFace(Face.down),
+              size: size,
+              onTap: onFaceTap?[Face.down],
+            ),
           ),
         ],
       ),
