@@ -1,116 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Rubik's Cube Analyzer">
+  <meta name="description" content="A new Flutter project.">
 
-  <!-- モバイル設定 -->
+  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Rubik's Cube Analyzer">
+  <meta name="apple-mobile-web-app-title" content="rubiks_cube_analyzer">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Rubik's Cube Analyzer</title>
+  <title>rubiks_cube_analyzer</title>
   <link rel="manifest" href="manifest.json">
-
-  <!-- Flutter SDKの読み込み -->
-  <script src="flutter.js" defer></script>
-  
-  <!-- Bluetooth Debug Tool -->
-  <script src="bluetooth_debug.js" defer></script>
-
-  <script>
-    // The value below is injected by flutter build, do not touch.
-    const serviceWorkerVersion = null;
-
-    // Web Bluetooth APIのサポート確認
-    if (!navigator.bluetooth) {
-      console.error('Web Bluetooth API is not available.');
-    } else {
-      console.log('Web Bluetooth API is available.');
-    }
-
-    // Flutter初期化（最新の方法）
-    window.addEventListener('load', function() {
-      // Flutterアプリケーションのロード
-      _flutter = _flutter || {};
-      _flutter.loader = _flutter.loader || {};
-      
-      var loading = document.querySelector('#loading');
-      
-      try {
-        _flutter.loader.loadEntrypoint({
-          serviceWorker: {
-            serviceWorkerVersion: serviceWorkerVersion,
-          },
-          onEntrypointLoaded: async function(engineInitializer) {
-            // エンジン初期化
-            let appRunner = await engineInitializer.initializeEngine({
-              // レンダラー設定（オプション）
-              renderer: 'canvaskit',
-            });
-            
-            // デバッグ情報表示
-            console.log('Flutter engine initialized successfully');
-            if (window.bluetoothDebugger) {
-              window.bluetoothDebugger.log('Flutter初期化成功', 'success');
-            }
-            
-            // Bluetoothイベントの監視を開始
-            if (navigator.bluetooth) {
-              navigator.bluetooth.addEventListener('advertisementreceived', (event) => {
-                if (window.bluetoothDebugger) {
-                  window.bluetoothDebugger.log('BLE Advertisement: ' + event.device.name);
-                }
-              });
-            }
-            
-            // アプリ実行
-            appRunner.runApp();
-          }
-        });
-      } catch (e) {
-        console.error('Flutter初期化エラー:', e);
-        if (window.bluetoothDebugger) {
-          window.bluetoothDebugger.log('Flutter初期化エラー: ' + e.message, 'error');
-        }
-      }
-    });
-  </script>
-  
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-    
-    #loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: white;
-      font-family: sans-serif;
-    }
-  </style>
 </head>
 <body>
-  <!-- ローディング表示 -->
-  <div id="loading">アプリを読み込んでいます...</div>
-  
-  <!-- Flutter アプリケーションのマウントポイント -->
-  <div id="flutter_target" style="width: 100vw; height: 100vh;"></div>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
